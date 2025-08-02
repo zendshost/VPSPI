@@ -12,12 +12,10 @@ Setelah build berhasil:
 npm start # akan jalan di http://IP-KAMU:31401
 
 Atau jika kamu pakai pm2:
-pm2 start npm --serverpi "vpspi" -- start
+pm2 start npm --name "vpspi" -- start
 ----------------------------------------
 🚀 Tips Lain:
 Build hanya perlu dilakukan sekali setelah deploy atau update kode.
-
 Pastikan kamu tidak menghapus folder .next/ setelah build.
-
 Jangan upload project hasil npm start langsung ke server tanpa membuild ulang.
 ----------------------------------------
