@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const LOCAL_PATHS = ['/api', '/_next', '/vite.ico', '/vite.ico', '/vite.png'];
+const LOCAL_PATHS = ['/api', '/_next', '/vite.ico', '/vite.png'];
 
 const IP_POOL = [
   '14.241.120.142',
@@ -20,14 +20,22 @@ const IP_POOL = [
   '81.240.60.124',
 ];
 
-// Fungsi ping IP (return ms atau 9999 jika gagal)
+// Cache global: IP terakhir dan timestamp update-nya
+globalThis.lastFastestIP = globalThis.lastFastestIP || {
+  ip: IP_POOL[0],
+  time: 0
+};
+
+// Ping IP dan ukur latency (ms)
 async function pingHost(ip) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1000);
-
   try {
     const start = Date.now();
-    await fetch(`http://${ip}:31401/`, { method: 'GET', signal: controller.signal });
+    await fetch(`http://${ip}:31401/`, {
+      method: 'GET',
+      signal: controller.signal,
+    });
     clearTimeout(timeout);
     return Date.now() - start;
   } catch {
@@ -36,19 +44,20 @@ async function pingHost(ip) {
   }
 }
 
-// Pilih 3 IP acak dan ambil yang paling cepat
+// Ambil 3 IP acak dari pool dan pilih yang latency-nya paling cepat
 async function getFastestIP() {
   const sampled = IP_POOL
-    .sort(() => 0.5 - Math.random()) // acak
-    .slice(0, 3); // ambil 3
+    .sort(() => 0.5 - Math.random())
+    .slice(0, 3);
 
-  const results = await Promise.all(sampled.map(async ip => ({
-    ip,
-    ms: await pingHost(ip)
-  })));
+  const results = await Promise.all(
+    sampled.map(async ip => ({
+      ip,
+      ms: await pingHost(ip)
+    }))
+  );
 
   results.sort((a, b) => a.ms - b.ms);
-
   return results[0].ip;
 }
 
@@ -59,7 +68,20 @@ export async function middleware(request) {
     return NextResponse.next();
   }
 
-  const selectedIP = await getFastestIP();
+  const now = Date.now();
+  const timeSinceLastPing = now - globalThis.lastFastestIP.time;
+
+  // Jika sudah lewat 60 detik, ping ulang
+  if (timeSinceLastPing > 60_000) {
+    const newIP = await getFastestIP();
+    globalThis.lastFastestIP = {
+      ip: newIP,
+      time: now
+    };
+    console.log(`🕒 IP tercepat diperbarui: ${newIP}`);
+  }
+
+  const selectedIP = globalThis.lastFastestIP.ip;
 
   const proxyUrl = request.nextUrl.clone();
   proxyUrl.hostname = selectedIP;
